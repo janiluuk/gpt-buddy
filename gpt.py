@@ -54,8 +54,8 @@ def generate_chatgpt_image(openai_client, user_text, assistant_output_text):
     image_url = response.data[0].url
     logging.info(image_url)
 
-    # Download the image
-    response = requests.get(image_url, stream=True)
+    # Download the image with timeout
+    response = requests.get(image_url, stream=True, timeout=30)
     if response.ok:
         with open("dalle_image.png", "wb") as image_file:
             response.raw.decode_content = True
@@ -126,7 +126,6 @@ def send_to_assistant(
         target=generate_chatgpt_image,
         args=(openai_client, input_text, assistant_output),
     )
-    image_thread.should_abort_immediately = True
     image_thread.start()
 
     if text_to_speech:

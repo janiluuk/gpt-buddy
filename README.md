@@ -42,8 +42,19 @@ $ source venv/bin/activate
 (venv) $ pip install -r requirements.txt
 ```
 
+Configure your API keys by copying the example settings file:
+```
+# Copy the example settings file
+(venv) $ cp settings.py.example settings.py
+
+# Edit settings.py with your favorite editor and add your API keys
+(venv) $ nano settings.py
+```
+
 Enter your Open AI, your ChatGPT Assistant `assistant_id`, and porcupine API keys into settings.py in the designated sections. Optionally, you can also provide a chat service (such as Telegram)
-if you want to be able to send generated images to yourself.  **Make sure not to commit any of these keys in this file.**
+if you want to be able to send generated images to yourself.  
+
+**SECURITY WARNING: Never commit your settings.py file with real API keys. The .gitignore file is configured to exclude it.**
 
 Start the program:
 ```

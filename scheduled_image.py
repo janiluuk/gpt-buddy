@@ -10,11 +10,23 @@ def scheduled_image():
     Intended to be run by a cronjob which will automatically show a new image
     on the display.
     """
+    import os
+    
+    # Check if thread file exists
+    if not os.path.exists("assistant_thread.txt"):
+        logging.error("assistant_thread.txt not found. Please run main.py first to create a thread.")
+        return
+    
     client = OpenAI(api_key=settings.openai_api_key)
     assistant = gpt.get_assistant(client)
     assistant_thread = ""
+    
     with open("assistant_thread.txt", "r") as assistant_thread_file:
-        assistant_thread = assistant_thread_file.read()
+        assistant_thread = assistant_thread_file.read().strip()
+    
+    if not assistant_thread:
+        logging.error("Empty assistant thread ID in assistant_thread.txt")
+        return
 
     gpt.send_to_assistant(
         client,

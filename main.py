@@ -23,13 +23,45 @@ current_prompt=""
 
 
 def main():
+    # Validate required directories exist
+    required_dirs = ["saved_images", "audio", "assistant_images"]
+    for dir_name in required_dirs:
+        if not os.path.exists(dir_name):
+            logging.error(f"Required directory '{dir_name}' not found. Creating it...")
+            os.makedirs(dir_name, exist_ok=True)
+    
+    # Validate API keys are configured
+    if not settings.openai_api_key or settings.openai_api_key == "":
+        logging.error("OpenAI API key not configured in settings.py")
+        print("ERROR: Please configure your OpenAI API key in settings.py")
+        return
+    
+    if not settings.openai_assistant_id or settings.openai_assistant_id == "":
+        logging.error("OpenAI Assistant ID not configured in settings.py")
+        print("ERROR: Please configure your OpenAI Assistant ID in settings.py")
+        return
+    
+    if not settings.pvporcupine_api_key or settings.pvporcupine_api_key == "":
+        logging.error("Porcupine API key not configured in settings.py")
+        print("ERROR: Please configure your Porcupine API key in settings.py")
+        return
+    
     client = OpenAI(api_key=settings.openai_api_key)
     assistant = gpt.get_assistant(client)
     assistant_thread = client.beta.threads.create()
+    
+    # Check if saved_images directory has any images
     images = os.listdir("saved_images")
-    random_image = random.choice(images)
-    helpers.display_image(f"saved_images/{random_image}")
-    current_image = random_image
+    if images:
+        random_image = random.choice(images)
+        helpers.display_image(f"saved_images/{random_image}")
+        current_image = random_image
+    else:
+        logging.warning("No saved images found. Using default assistant image.")
+        current_image = None
+        # Display a default image if available
+        if os.path.exists("assistant_images/listening.png"):
+            helpers.display_image("assistant_images/listening.png")
 
     # Save the assistant thread to a text file, so we can use it in our
     # scheduled image cronjob
@@ -179,7 +211,7 @@ def main():
                       save_images=True,
                       cfg_scale=2
                     )
-                    file_path = "saved_images/{filename}.png"
+                    file_path = f"saved_images/{filename}.png"
                     result1.image.save(file_path)
                     helpers.display_image(file_path)
                     current_image = file_path
@@ -190,11 +222,22 @@ def main():
                 ):
                     # Pick a random saved image and display it on the screen
                     images = os.listdir("saved_images")
-                    if current_image:
-                        images.remove(current_image)
-                    random_image = random.choice(images)
-                    helpers.display_image(f"saved_images/{random_image}")
-                    current_image = random_image
+                    if not images:
+                        logging.warning("No saved images available")
+                        helpers.play_audio("audio/oh_ok.mp3")
+                    else:
+                        # Remove current image from selection if it exists
+                        if current_image and current_image in images:
+                            images.remove(current_image)
+                        
+                        # Check if there are still images to choose from
+                        if images:
+                            random_image = random.choice(images)
+                            helpers.display_image(f"saved_images/{random_image}")
+                            current_image = random_image
+                        else:
+                            logging.info("Only one image available, showing current")
+                            helpers.play_audio("audio/oh_ok.mp3")
                 elif any(
                     show_ai_image_phrase in recognised_speech
                     for show_ai_image_phrase in show_ai_image_phrases
@@ -217,7 +260,7 @@ def main():
                       save_images=True,
                       cfg_scale=2
                     )
-                    file_path = "saved_images/{filename}.png"
+                    file_path = f"saved_images/{filename}.png"
                     result1.image.save(file_path)
                     helpers.display_image(file_path)
                     current_image = file_path
@@ -230,7 +273,7 @@ def main():
                     gpt.send_to_assistant(
                         client, assistant, assistant_thread.id, recognised_speech
                     )
-                    wait_for_hotword = False
+                    wait_for_hotword = True
 
             except speech_recognition.UnknownValueError:
                 logging.info("Could not understand audio")
