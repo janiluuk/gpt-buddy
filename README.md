@@ -1,5 +1,9 @@
 # ChatGPT Buddy
 
+![Tests](https://github.com/janiluuk/gpt-buddy/actions/workflows/test.yml/badge.svg)
+![Code Quality](https://github.com/janiluuk/gpt-buddy/actions/workflows/lint.yml/badge.svg)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A ChatGPT assistant connected to a small Raspberry Pi display, with voice activation (using [porcupine](https://github.com/Picovoice/porcupine))
 and image generation (using Dall-E and local Stable Diffusion).
 
@@ -61,6 +65,61 @@ Start the program:
 (venv) $ python main.py
 ```
 Say "Porcupine" to activate the display to start listening to input.
+
+## Development
+
+### Running Tests
+
+Tests are automatically run on every push via GitHub Actions. To run tests locally:
+
+```bash
+# Install test dependencies
+pip install -r requirements-dev.txt
+
+# Run all tests with coverage
+pytest --cov=. --cov-report=html
+
+# View coverage report
+open htmlcov/index.html
+```
+
+### Code Quality
+
+The project uses automated code quality checks:
+
+```bash
+# Format code with black
+black .
+
+# Lint code
+flake8 .
+
+# Security analysis
+bandit -r .
+```
+
+### CI/CD Workflows
+
+This project includes GitHub Actions workflows for:
+
+- **Tests** (`test.yml`): Runs test suite on Python 3.10, 3.11, and 3.12
+- **Code Quality** (`lint.yml`): Checks formatting, linting, and security
+- **Release** (`release.yml`): Automatically creates releases when main branch is updated
+
+See [.github/workflows/README.md](.github/workflows/README.md) for detailed workflow documentation.
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Ensure tests pass: `pytest`
+5. Ensure code is formatted: `black .`
+6. Submit a pull request
+
+Pull requests will automatically run tests and code quality checks.
+
+## Based On
 
 Based partly on https://github.com/AlanCunningham/chatgpt-assistant
 
