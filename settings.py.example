@@ -15,7 +15,10 @@ pvporcupine_api_key = "your-porcupine-api-key-here"
 stable_diffusion_api = "192.168.2.22"
 
 # Stable Diffusion WebUI port (default is usually 7860)
-stable_diffusion_port = "7860"
+stable_diffusion_port = 7860
+
+# Stable Diffusion steps (default inference steps)
+stable_diffusion_steps = 8
 
 # Apprise notification services (optional)
 # List of Apprise service URLs for sending images
