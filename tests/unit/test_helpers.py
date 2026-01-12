@@ -127,9 +127,15 @@ class TestDisplayImage:
         # Get the path that was passed to fbi
         popen_args = mock_subprocess['popen'].call_args[0][0]
         
-        # The path should be absolute
-        image_path = popen_args[-2]  # Second to last argument
-        assert os.path.isabs(image_path)
+        # Find the image path in arguments (should be an absolute path to our file)
+        image_path = None
+        for arg in popen_args:
+            if arg.endswith('test.png'):
+                image_path = arg
+                break
+        
+        assert image_path is not None, "Image path not found in fbi arguments"
+        assert os.path.isabs(image_path), "Image path should be absolute"
     
     def test_display_image_kills_previous_fbi(self, mock_subprocess, tmp_path):
         """Test that previous fbi process is killed before displaying new image"""
