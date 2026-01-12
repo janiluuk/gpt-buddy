@@ -46,7 +46,7 @@ def display_image(image_file_path):
         abs_path = os.path.abspath(image_file_path)
         logging.info(f"Displaying image: {abs_path}")
         
-        # Remove the current image by terminating tracked process or killing all fbi
+        # Remove the current image by terminating tracked process
         if _fbi_process and _fbi_process.poll() is None:
             # Process is still running, terminate it
             logging.debug(f"Terminating existing fbi process (PID: {_fbi_process.pid})")
@@ -56,10 +56,6 @@ def display_image(image_file_path):
             except subprocess.TimeoutExpired:
                 logging.warning("fbi process did not terminate, killing it")
                 _fbi_process.kill()
-        else:
-            # Fallback to killall if we don't have a tracked process
-            subprocess.call(["sudo", "killall", "-15", "fbi"], 
-                          stderr=subprocess.DEVNULL)
         
         # Display the new image and track the process
         _fbi_process = subprocess.Popen(

@@ -51,10 +51,16 @@ def generate_stable_diffusion_image(prompt, styles=None):
         return None
     
     try:
+        # Get steps from settings with validation
+        steps = getattr(settings, 'stable_diffusion_steps', 8)
+        if not isinstance(steps, int) or steps < 1 or steps > 100:
+            logging.warning(f"Invalid stable_diffusion_steps: {steps}, using default: 8")
+            steps = 8
+        
         api = webuiapi.WebUIApi(
             host=settings.stable_diffusion_api,
             port=int(settings.stable_diffusion_port),
-            steps=getattr(settings, 'stable_diffusion_steps', 8)
+            steps=steps
         )
         
         filename = time.strftime("%Y%m%d-%H%M%S")
@@ -366,7 +372,7 @@ def main():
             logging.info("Waiting for image generation to complete...")
             gpt.image_thread.join(timeout=10)
             if gpt.image_thread.is_alive():
-                logging.warning("Image generation thread did not complete in time")
+                logging.warning("Image generation thread did not complete in time, continuing with shutdown")
         
         # Cleanup display process
         helpers.cleanup_display()

@@ -6,6 +6,7 @@ import requests
 import shutil
 import threading
 import time
+from io import BytesIO
 from PIL import Image
 from pathlib import Path
 
@@ -80,7 +81,6 @@ def generate_chatgpt_image(openai_client, user_text, assistant_output_text):
         if response.ok:
             # Process image directly from stream without saving twice
             logging.info(f"Resizing image to {IMAGE_WIDTH}x{IMAGE_HEIGHT}")
-            from io import BytesIO
             
             # Read image data into memory
             image_data = BytesIO()
@@ -140,7 +140,6 @@ def send_to_assistant(
         while not run_completed:
             if timeout_counter >= timeout_limit:
                 logging.warning(f"Assistant timeout exceeded ({timeout_limit}s)")
-                timeout_counter = 0
                 break
             run = openai_client.beta.threads.runs.retrieve(
                 thread_id=assistant_thread_id,
