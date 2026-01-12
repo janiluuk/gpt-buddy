@@ -68,13 +68,11 @@ class TestDisplayImage:
         image_file = tmp_path / "test.png"
         image_file.write_text("test image")
         
+        # Reset the global _fbi_process before test
+        helpers._fbi_process = None
+        
         # Call the function
         helpers.display_image(str(image_file))
-        
-        # Verify killall was called to stop previous fbi
-        mock_subprocess['call'].assert_called_once_with(
-            ["sudo", "killall", "-15", "fbi"]
-        )
         
         # Verify fbi was called with correct arguments
         mock_subprocess['popen'].assert_called_once()
@@ -139,18 +137,28 @@ class TestDisplayImage:
     
     def test_display_image_kills_previous_fbi(self, mock_subprocess, tmp_path):
         """Test that previous fbi process is killed before displaying new image"""
+        import unittest.mock as mock
+        
         image_file = tmp_path / "test.png"
         image_file.write_text("test")
         
+        # Create a mock for the first fbi process
+        first_process = mock.MagicMock()
+        first_process.poll.return_value = None  # Process is still running
+        first_process.pid = 12345
+        
+        # Set up mock to return different process objects for each call
+        process_calls = [first_process, mock.MagicMock()]
+        mock_subprocess['popen'].side_effect = process_calls
+        
+        # First call - creates the process
         helpers.display_image(str(image_file))
         
-        # Verify killall was called before Popen
-        assert mock_subprocess['call'].called
-        assert mock_subprocess['popen'].called
+        # Second call - should terminate the previous process
+        helpers.display_image(str(image_file))
         
-        # killall should be called first
-        call_order = [
-            mock_subprocess['call'].call_args,
-            mock_subprocess['popen'].call_args
-        ]
-        assert len(call_order) == 2
+        # Verify the first process was terminated
+        first_process.terminate.assert_called_once()
+        
+        # Verify Popen was called twice (once for each display)
+        assert mock_subprocess['popen'].call_count == 2
