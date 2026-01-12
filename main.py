@@ -6,6 +6,7 @@ import os
 import random
 import settings
 import shutil
+import signal
 import speech_recognition
 import time
 import pvporcupine
@@ -14,22 +15,128 @@ from openai import OpenAI
 import webuiapi
 from PIL import Image
 
-# create API client
-api = webuiapi.WebUIApi()
 
-# create API client with custom host, port
-current_prompt=""
+# Signal handler for graceful shutdown
+def signal_handler(sig, frame):
+    """Handle shutdown signals gracefully"""
+    logging.info(f"Received signal {sig}, initiating graceful shutdown...")
+    raise KeyboardInterrupt
+
+
+# Constants
+MICROPHONE_DEVICE_INDEX = 1
+PHRASE_TIME_LIMIT_SECONDS = 10
+ASSISTANT_TIMEOUT_SECONDS = 10
+DISPLAY_WIDTH = 800
+DISPLAY_HEIGHT = 480
+
+
+def generate_stable_diffusion_image(prompt, styles=None):
+    """
+    Generate an image using Stable Diffusion API.
+    
+    Args:
+        prompt: Text prompt for image generation
+        styles: List of style names to apply (default: ["lcmxl"])
+    
+    Returns:
+        Path to the saved image file
+    """
+    if styles is None:
+        styles = ["lcmxl"]
+    
+    # Check if Stable Diffusion is configured
+    if not settings.stable_diffusion_api or not settings.stable_diffusion_port:
+        logging.warning("Stable Diffusion not configured in settings.py")
+        return None
+    
+    try:
+        # Get steps from settings with validation
+        steps = getattr(settings, 'stable_diffusion_steps', 8)
+        if not isinstance(steps, int) or steps < 1 or steps > 100:
+            logging.warning(f"Invalid stable_diffusion_steps: {steps}, using default: 8")
+            steps = 8
+        
+        api = webuiapi.WebUIApi(
+            host=settings.stable_diffusion_api,
+            port=int(settings.stable_diffusion_port),
+            steps=steps
+        )
+        
+        filename = time.strftime("%Y%m%d-%H%M%S")
+        
+        result = api.txt2img(
+            prompt=prompt,
+            negative_prompt="ugly, out of frame",
+            width=DISPLAY_WIDTH,
+            height=DISPLAY_HEIGHT,
+            styles=styles,
+            save_images=True,
+            cfg_scale=2
+        )
+        
+        file_path = f"saved_images/{filename}.png"
+        result.image.save(file_path)
+        logging.info(f"Stable Diffusion image saved to {file_path}")
+        return file_path
+    except Exception as e:
+        logging.error(f"Error generating Stable Diffusion image: {e}")
+        return None
 
 
 
 def main():
+    """Main application loop for the GPT Buddy voice assistant."""
+    logging.info("=" * 60)
+    logging.info("Starting GPT Buddy Voice Assistant")
+    logging.info("=" * 60)
+    
+    # Validate required directories exist
+    required_dirs = ["saved_images", "audio", "assistant_images"]
+    for dir_name in required_dirs:
+        if not os.path.exists(dir_name):
+            logging.warning(f"Required directory '{dir_name}' not found. Creating it...")
+            os.makedirs(dir_name, exist_ok=True)
+        else:
+            logging.info(f"Directory '{dir_name}' exists")
+    
+    # Validate API keys are configured
+    logging.info("Validating API keys...")
+    if not settings.openai_api_key or settings.openai_api_key == "":
+        logging.error("OpenAI API key not configured in settings.py")
+        print("ERROR: Please configure your OpenAI API key in settings.py")
+        return
+    
+    if not settings.openai_assistant_id or settings.openai_assistant_id == "":
+        logging.error("OpenAI Assistant ID not configured in settings.py")
+        print("ERROR: Please configure your OpenAI Assistant ID in settings.py")
+        return
+    
+    if not settings.pvporcupine_api_key or settings.pvporcupine_api_key == "":
+        logging.error("Porcupine API key not configured in settings.py")
+        print("ERROR: Please configure your Porcupine API key in settings.py")
+        return
+    
+    logging.info("All API keys validated successfully")
+    
+    logging.info("Initializing OpenAI client and assistant...")
     client = OpenAI(api_key=settings.openai_api_key)
     assistant = gpt.get_assistant(client)
     assistant_thread = client.beta.threads.create()
+    logging.info(f"Assistant thread created: {assistant_thread.id}")
+    
+    # Check if saved_images directory has any images
     images = os.listdir("saved_images")
-    random_image = random.choice(images)
-    helpers.display_image(f"saved_images/{random_image}")
-    current_image = random_image
+    if images:
+        random_image = random.choice(images)
+        helpers.display_image(f"saved_images/{random_image}")
+        current_image = random_image
+    else:
+        logging.warning("No saved images found. Using default assistant image.")
+        current_image = None
+        # Display a default image if available
+        if os.path.exists("assistant_images/listening.png"):
+            helpers.display_image("assistant_images/listening.png")
 
     # Save the assistant thread to a text file, so we can use it in our
     # scheduled image cronjob
@@ -48,34 +155,41 @@ def main():
     first_session_listen = True
     current_prompt = None
     prompt = None
+    
+    # Resources that need cleanup
+    handle = None
+    hotword_recorder = None
 
-    while running:
-        if wait_for_hotword:
-            if first_session_listen:
-                # Hotword setup
-                logging.info(pvporcupine.KEYWORDS)
-                pvporcupine_api_key = settings.pvporcupine_api_key
-                handle = pvporcupine.create(
-                    access_key=pvporcupine_api_key, keywords=["porcupine"]
-                )
+    try:
+        while running:
+            if wait_for_hotword:
+                if first_session_listen:
+                    # Hotword setup
+                    logging.info(pvporcupine.KEYWORDS)
+                    pvporcupine_api_key = settings.pvporcupine_api_key
+                    handle = pvporcupine.create(
+                        access_key=pvporcupine_api_key, keywords=["porcupine"]
+                    )
 
-                hotword_recorder = PvRecorder(
-                    frame_length=handle.frame_length, device_index=1
-                )
-                hotword_recorder.start()
+                    hotword_recorder = PvRecorder(
+                        frame_length=handle.frame_length, device_index=MICROPHONE_DEVICE_INDEX
+                    )
+                    hotword_recorder.start()
 
-                logging.info("Waiting for hotword...")
-                first_session_listen = False
+                    logging.info("Waiting for hotword...")
+                    first_session_listen = False
 
-            # Wait for the hotword
-            pcm = hotword_recorder.read()
-            result = handle.process(pcm)
-            if result >= 0:
-                # Hotword detected
-                logging.info("Detected!")
-                wait_for_hotword = False
-                hotword_recorder.delete()
-                handle.delete()
+                # Wait for the hotword
+                pcm = hotword_recorder.read()
+                result = handle.process(pcm)
+                if result >= 0:
+                    # Hotword detected
+                    logging.info("Detected!")
+                    wait_for_hotword = False
+                    hotword_recorder.delete()
+                    handle.delete()
+                    hotword_recorder = None
+                    handle = None
         else:
             # Hotword detected, continue with speech recognition
             hotword_responses = [
@@ -89,7 +203,7 @@ def main():
 
             logging.info("Ready for input:")
             with microphone as source:
-                audio = speech_result.listen(source, phrase_time_limit=10)
+                audio = speech_result.listen(source, phrase_time_limit=PHRASE_TIME_LIMIT_SECONDS)
             try:
                 recognised_speech = speech_result.recognize_google(audio)
                 logging.info(f"Recognised speech: {recognised_speech}")
@@ -161,28 +275,20 @@ def main():
                     make_another_phrase in recognised_speech
                     for make_another_phrase in make_another_phrases
                 ):
-                    api = webuiapi.WebUIApi(host='192.168.2.22', port=7860, steps=8)
                     end_conversation_phrases = [
                         "audio/oh_ok.mp3",
                         "audio/alright_then.mp3",
                     ]
                     helpers.play_audio(random.choice(end_conversation_phrases))
 
-                    filename = time.strftime("%Y%m%d-%H%M%S")
-                    print(current_prompt)
-
-                    result1 = api.txt2img(prompt=current_prompt,
-                      negative_prompt="ugly, out of frame",
-                      styles=["anime"],
-                      width=800,
-                      height=480,
-                      save_images=True,
-                      cfg_scale=2
-                    )
-                    file_path = "saved_images/{filename}.png"
-                    result1.image.save(file_path)
-                    helpers.display_image(file_path)
-                    current_image = file_path
+                    logging.info(f"Generating another image with prompt: {current_prompt}")
+                    
+                    file_path = generate_stable_diffusion_image(current_prompt, styles=["anime"])
+                    if file_path:
+                        helpers.display_image(file_path)
+                        current_image = file_path
+                    else:
+                        logging.error("Failed to generate Stable Diffusion image")
 
                 elif any(
                     show_random_image_phrase in recognised_speech
@@ -190,37 +296,42 @@ def main():
                 ):
                     # Pick a random saved image and display it on the screen
                     images = os.listdir("saved_images")
-                    if current_image:
-                        images.remove(current_image)
-                    random_image = random.choice(images)
-                    helpers.display_image(f"saved_images/{random_image}")
-                    current_image = random_image
+                    if not images:
+                        logging.warning("No saved images available")
+                        helpers.play_audio("audio/oh_ok.mp3")
+                    else:
+                        # Remove current image from selection if it exists
+                        if current_image and current_image in images:
+                            images.remove(current_image)
+                        
+                        # Check if there are still images to choose from
+                        if images:
+                            random_image = random.choice(images)
+                            helpers.display_image(f"saved_images/{random_image}")
+                            current_image = random_image
+                        else:
+                            logging.info("Only one image available, showing current")
+                            helpers.play_audio("audio/oh_ok.mp3")
                 elif any(
                     show_ai_image_phrase in recognised_speech
                     for show_ai_image_phrase in show_ai_image_phrases
                 ):
-                    # Pick a random saved image and display it on the screen
-                    api = webuiapi.WebUIApi(host='192.168.2.22', port=7860, steps=8)
-                    filename = time.strftime("%Y%m%d-%H%M%S")
+                    # Generate image with Stable Diffusion based on user prompt
                     end_conversation_phrases = [
                         "audio/oh_ok.mp3",
                         "audio/alright_then.mp3",
                     ]
                     helpers.play_audio(random.choice(end_conversation_phrases))
 
-                    current_prompt = ""+recognised_speech.replace("make image", "")
-                    result1 = api.txt2img(prompt=current_prompt,
-                      negative_prompt="ugly, out of frame",
-                      width=800,
-                      height=480,
-                      styles=["lcmxl"],
-                      save_images=True,
-                      cfg_scale=2
-                    )
-                    file_path = "saved_images/{filename}.png"
-                    result1.image.save(file_path)
-                    helpers.display_image(file_path)
-                    current_image = file_path
+                    current_prompt = recognised_speech.replace("make image", "").strip()
+                    logging.info(f"Generating image with prompt: {current_prompt}")
+                    
+                    file_path = generate_stable_diffusion_image(current_prompt, styles=["lcmxl"])
+                    if file_path:
+                        helpers.display_image(file_path)
+                        current_image = file_path
+                    else:
+                        logging.error("Failed to generate Stable Diffusion image")
 
                 else:
                     print(recognised_speech)
@@ -230,7 +341,7 @@ def main():
                     gpt.send_to_assistant(
                         client, assistant, assistant_thread.id, recognised_speech
                     )
-                    wait_for_hotword = False
+                    wait_for_hotword = True
 
             except speech_recognition.UnknownValueError:
                 logging.info("Could not understand audio")
@@ -239,9 +350,41 @@ def main():
                 first_session_listen = True
             except speech_recognition.RequestError as e:
                 logging.info(f"Error: {e}")
+            except KeyboardInterrupt:
+                logging.info("Shutting down gracefully...")
+                running = False
+    finally:
+        # Cleanup resources
+        logging.info("Cleaning up resources...")
+        if hotword_recorder is not None:
+            try:
+                hotword_recorder.delete()
+            except Exception as e:
+                logging.error(f"Error cleaning up recorder: {e}")
+        if handle is not None:
+            try:
+                handle.delete()
+            except Exception as e:
+                logging.error(f"Error cleaning up porcupine handle: {e}")
+        
+        # Wait for image generation thread to complete if running
+        if gpt.image_thread is not None and gpt.image_thread.is_alive():
+            logging.info("Waiting for image generation to complete...")
+            gpt.image_thread.join(timeout=10)
+            if gpt.image_thread.is_alive():
+                logging.warning("Image generation thread did not complete in time, continuing with shutdown")
+        
+        # Cleanup display process
+        helpers.cleanup_display()
+        
+        logging.info("Shutdown complete")
 
 
 if __name__ == "__main__":
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     logging.basicConfig(
         format="%(asctime)s %(filename)s %(lineno)d - %(message)s",
         level=logging.INFO,

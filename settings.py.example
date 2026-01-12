@@ -1,0 +1,32 @@
+# Configuration file for gpt-buddy
+# Copy this file to settings.py and fill in your API keys
+
+# OpenAI API Key - Get from https://platform.openai.com/api-keys
+openai_api_key = "your-openai-api-key-here"
+
+# OpenAI Assistant ID - Create an assistant at https://platform.openai.com/assistants
+openai_assistant_id = "asst_xxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Porcupine API Key - Get from https://console.picovoice.ai/
+pvporcupine_api_key = "your-porcupine-api-key-here"
+
+# Stable Diffusion Configuration (optional)
+# Host IP address where Stable Diffusion WebUI is running
+stable_diffusion_api = "192.168.2.22"
+
+# Stable Diffusion WebUI port (default is usually 7860)
+stable_diffusion_port = 7860
+
+# Stable Diffusion steps (default inference steps)
+stable_diffusion_steps = 8
+
+# Apprise notification services (optional)
+# List of Apprise service URLs for sending images
+# Examples:
+#   - Telegram: "tgram://bottoken/chatid"
+#   - Discord: "discord://webhook_id/webhook_token"
+#   - Slack: "slack://tokenA/tokenB/tokenC"
+# See https://github.com/caronc/apprise for more services
+apprise_services = [
+    # "tgram://your_bot_token/your_chat_id",
+]

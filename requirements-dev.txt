@@ -1,0 +1,24 @@
+# Development and testing dependencies
+# Install with: pip install -r requirements-dev.txt
+
+# Testing frameworks
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+pytest-asyncio>=0.21.1
+
+# Code quality
+black>=23.3.0
+flake8>=6.1.0
+pylint>=2.17.5
+mypy>=1.5.1
+
+# Security scanning
+bandit>=1.7.5
+safety>=2.3.5
+
+# Time manipulation for tests
+freezegun>=1.2.2
+
+# Additional test utilities
+responses>=0.23.3

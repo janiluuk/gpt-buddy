@@ -1,0 +1,122 @@
+name: Create Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'tests/**'
+      - '.github/**'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Get version from last commit
+      id: version
+      run: |
+        # Extract version from git tag or use date-based version
+        if git describe --tags --exact-match 2>/dev/null; then
+          VERSION=$(git describe --tags --exact-match)
+        else
+          VERSION="v$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)"
+        fi
+        echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Version: ${VERSION}"
+
+    - name: Check if version already exists
+      id: check_version
+      run: |
+        if git rev-parse "${{ steps.version.outputs.VERSION }}" >/dev/null 2>&1; then
+          echo "EXISTS=true" >> $GITHUB_OUTPUT
+        else
+          echo "EXISTS=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create Release Archive
+      if: steps.check_version.outputs.EXISTS == 'false'
+      run: |
+        # Create archive excluding unnecessary files
+        tar -czf gpt-buddy-${{ steps.version.outputs.VERSION }}.tar.gz \
+          --exclude='.git' \
+          --exclude='.github' \
+          --exclude='lib' \
+          --exclude='bin' \
+          --exclude='__pycache__' \
+          --exclude='*.pyc' \
+          --exclude='venv' \
+          --exclude='.pytest_cache' \
+          --exclude='htmlcov' \
+          --exclude='.coverage' \
+          --exclude='speech.mp3' \
+          --exclude='dalle_image.png' \
+          --exclude='resized.png' \
+          --exclude='assistant_thread.txt' \
+          --exclude='saved_images' \
+          --exclude='settings.py' \
+          .
+
+    - name: Generate Release Notes
+      if: steps.check_version.outputs.EXISTS == 'false'
+      id: release_notes
+      run: |
+        # Get commits since last tag
+        if git describe --tags --abbrev=0 2>/dev/null; then
+          LAST_TAG=$(git describe --tags --abbrev=0)
+          COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+        else
+          COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges -10)
+        fi
+        
+        # Create release notes
+        cat > release_notes.md << EOF
+        ## GPT Buddy Release ${{ steps.version.outputs.VERSION }}
+        
+        ### Changes
+        ${COMMITS}
+        
+        ### Installation
+        1. Extract the archive: \`tar -xzf gpt-buddy-${{ steps.version.outputs.VERSION }}.tar.gz\`
+        2. Follow installation instructions in README.md
+        3. Copy \`settings.py.example\` to \`settings.py\` and configure your API keys
+        
+        ### Requirements
+        - Python 3.10+
+        - Raspberry Pi (recommended) or Linux system
+        - See requirements.txt for Python dependencies
+        EOF
+        
+        echo "Release notes created"
+
+    - name: Create GitHub Release
+      if: steps.check_version.outputs.EXISTS == 'false'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body_path: release_notes.md
+        files: |
+          gpt-buddy-${{ steps.version.outputs.VERSION }}.tar.gz
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Notify release created
+      if: steps.check_version.outputs.EXISTS == 'false'
+      run: |
+        echo "✅ Release ${{ steps.version.outputs.VERSION }} created successfully"
+        echo "📦 Archive: gpt-buddy-${{ steps.version.outputs.VERSION }}.tar.gz"
