@@ -80,14 +80,22 @@ def generate_stable_diffusion_image(prompt, styles=None):
 
 
 def main():
+    """Main application loop for the GPT Buddy voice assistant."""
+    logging.info("=" * 60)
+    logging.info("Starting GPT Buddy Voice Assistant")
+    logging.info("=" * 60)
+    
     # Validate required directories exist
     required_dirs = ["saved_images", "audio", "assistant_images"]
     for dir_name in required_dirs:
         if not os.path.exists(dir_name):
-            logging.error(f"Required directory '{dir_name}' not found. Creating it...")
+            logging.warning(f"Required directory '{dir_name}' not found. Creating it...")
             os.makedirs(dir_name, exist_ok=True)
+        else:
+            logging.info(f"Directory '{dir_name}' exists")
     
     # Validate API keys are configured
+    logging.info("Validating API keys...")
     if not settings.openai_api_key or settings.openai_api_key == "":
         logging.error("OpenAI API key not configured in settings.py")
         print("ERROR: Please configure your OpenAI API key in settings.py")
@@ -103,9 +111,13 @@ def main():
         print("ERROR: Please configure your Porcupine API key in settings.py")
         return
     
+    logging.info("All API keys validated successfully")
+    
+    logging.info("Initializing OpenAI client and assistant...")
     client = OpenAI(api_key=settings.openai_api_key)
     assistant = gpt.get_assistant(client)
     assistant_thread = client.beta.threads.create()
+    logging.info(f"Assistant thread created: {assistant_thread.id}")
     
     # Check if saved_images directory has any images
     images = os.listdir("saved_images")
@@ -355,6 +367,9 @@ def main():
             gpt.image_thread.join(timeout=10)
             if gpt.image_thread.is_alive():
                 logging.warning("Image generation thread did not complete in time")
+        
+        # Cleanup display process
+        helpers.cleanup_display()
         
         logging.info("Shutdown complete")
 
