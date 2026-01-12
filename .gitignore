@@ -57,6 +57,12 @@ speech.mp3
 *.log
 /tmp/
 
+# Testing
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
 # OS
 .DS_Store
 Thumbs.db
