@@ -14,10 +14,11 @@ from pvrecorder import PvRecorder
 from openai import OpenAI
 import webuiapi
 from PIL import Image
+from typing import Optional, List, Any
 
 
 # Signal handler for graceful shutdown
-def signal_handler(sig, frame):
+def signal_handler(sig: int, frame: Any) -> None:
     """Handle shutdown signals gracefully"""
     logging.info(f"Received signal {sig}, initiating graceful shutdown...")
     raise KeyboardInterrupt
@@ -31,7 +32,39 @@ DISPLAY_WIDTH = 800
 DISPLAY_HEIGHT = 480
 
 
-def generate_stable_diffusion_image(prompt, styles=None):
+def sanitize_input(text: str) -> str:
+    """
+    Sanitize user input by removing potentially dangerous characters
+    and limiting length.
+    
+    Args:
+        text: Raw text input to sanitize
+    
+    Returns:
+        Sanitized text string
+    """
+    if not text:
+        return ""
+    
+    # Strip whitespace
+    text = text.strip()
+    
+    # Limit length to prevent abuse
+    max_length = 500
+    if len(text) > max_length:
+        logging.warning(f"Input truncated from {len(text)} to {max_length} characters")
+        text = text[:max_length]
+    
+    # Remove control characters except newlines and tabs
+    sanitized = ''.join(char for char in text if char.isprintable() or char in '\n\t')
+    
+    # Remove any null bytes
+    sanitized = sanitized.replace('\x00', '')
+    
+    return sanitized
+
+
+def generate_stable_diffusion_image(prompt: str, styles: Optional[List[str]] = None) -> Optional[str]:
     """
     Generate an image using Stable Diffusion API.
     
@@ -40,7 +73,7 @@ def generate_stable_diffusion_image(prompt, styles=None):
         styles: List of style names to apply (default: ["lcmxl"])
     
     Returns:
-        Path to the saved image file
+        Path to the saved image file, or None if generation fails
     """
     if styles is None:
         styles = ["lcmxl"]
@@ -206,6 +239,8 @@ def main():
                 audio = speech_result.listen(source, phrase_time_limit=PHRASE_TIME_LIMIT_SECONDS)
             try:
                 recognised_speech = speech_result.recognize_google(audio)
+                # Sanitize the recognized speech input
+                recognised_speech = sanitize_input(recognised_speech)
                 logging.info(f"Recognised speech: {recognised_speech}")
                 wait_for_hotword = True
                 first_session_listen = True

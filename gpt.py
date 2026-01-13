@@ -9,6 +9,9 @@ import time
 from io import BytesIO
 from PIL import Image
 from pathlib import Path
+from typing import Optional
+from openai import OpenAI
+from openai.types.beta.assistant import Assistant
 
 
 # Constants
@@ -21,7 +24,7 @@ NETWORK_TIMEOUT_SECONDS = 30
 image_thread = None
 
 
-def get_assistant(openai_client):
+def get_assistant(openai_client: OpenAI) -> Assistant:
     """
     Returns an already-created Assistant.
     """
@@ -35,7 +38,7 @@ def get_assistant(openai_client):
         raise
 
 
-def whisper_text_to_speech(openai_client, text_to_say):
+def whisper_text_to_speech(openai_client: OpenAI, text_to_say: str) -> None:
     """
     Text to speech using OpenAI's Whisper API.
     """
@@ -53,7 +56,7 @@ def whisper_text_to_speech(openai_client, text_to_say):
         raise
 
 
-def generate_chatgpt_image(openai_client, user_text, assistant_output_text):
+def generate_chatgpt_image(openai_client: OpenAI, user_text: str, assistant_output_text: str) -> None:
     """
     Generates a dall-e image based on given text (usually the output of the
     GPT assistant)
@@ -107,8 +110,8 @@ def generate_chatgpt_image(openai_client, user_text, assistant_output_text):
 
 
 def send_to_assistant(
-    openai_client, assistant, assistant_thread_id, input_text, text_to_speech=True
-):
+    openai_client: OpenAI, assistant: Assistant, assistant_thread_id: str, input_text: str, text_to_speech: bool = True
+) -> None:
     """
     Send text to an OpenAI Assistant and gets the response to pass to Whisper
     and Dall-E.
