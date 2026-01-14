@@ -17,6 +17,21 @@ from PIL import Image
 from typing import Optional, List, Any
 
 
+class GPTBuddyError(Exception):
+    """Base exception class for GPT Buddy errors"""
+    pass
+
+
+class ExternalServiceError(GPTBuddyError):
+    """Exception raised when external services fail"""
+    pass
+
+
+class ConfigurationError(GPTBuddyError):
+    """Exception raised when configuration is invalid"""
+    pass
+
+
 # Signal handler for graceful shutdown
 def signal_handler(sig: int, frame: Any) -> None:
     """Handle shutdown signals gracefully"""
@@ -62,6 +77,48 @@ def sanitize_input(text: str) -> str:
     sanitized = sanitized.replace('\x00', '')
     
     return sanitized
+
+
+def check_external_services() -> bool:
+    """
+    Perform health checks on external services.
+    
+    Returns:
+        True if all critical services are accessible, False otherwise
+        
+    Raises:
+        ExternalServiceError: If critical services are not accessible
+    """
+    import requests
+    
+    logging.info("Performing health checks on external services...")
+    
+    # Check OpenAI API
+    try:
+        logging.info("Checking OpenAI API connectivity...")
+        client = OpenAI(api_key=settings.openai_api_key)
+        # Simple API call to verify connectivity
+        client.models.list()
+        logging.info("✓ OpenAI API is accessible")
+    except Exception as e:
+        logging.error(f"✗ OpenAI API check failed: {e}")
+        raise ExternalServiceError(f"Cannot connect to OpenAI API: {e}")
+    
+    # Check Stable Diffusion API (optional service)
+    if settings.stable_diffusion_api and settings.stable_diffusion_port:
+        try:
+            logging.info("Checking Stable Diffusion API connectivity...")
+            url = f"http://{settings.stable_diffusion_api}:{settings.stable_diffusion_port}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                logging.info("✓ Stable Diffusion API is accessible")
+            else:
+                logging.warning(f"⚠ Stable Diffusion API returned status {response.status_code}")
+        except Exception as e:
+            logging.warning(f"⚠ Stable Diffusion API check failed: {e}")
+            logging.warning("Stable Diffusion features may not work, but this is optional")
+    
+    return True
 
 
 def generate_stable_diffusion_image(prompt: str, styles: Optional[List[str]] = None) -> Optional[str]:
@@ -135,22 +192,29 @@ def main():
     
     # Validate API keys are configured
     logging.info("Validating API keys...")
-    if not settings.openai_api_key or settings.openai_api_key == "":
-        logging.error("OpenAI API key not configured in settings.py")
-        print("ERROR: Please configure your OpenAI API key in settings.py")
+    try:
+        if not settings.openai_api_key or settings.openai_api_key == "":
+            raise ConfigurationError("OpenAI API key not configured in settings.py")
+        
+        if not settings.openai_assistant_id or settings.openai_assistant_id == "":
+            raise ConfigurationError("OpenAI Assistant ID not configured in settings.py")
+        
+        if not settings.pvporcupine_api_key or settings.pvporcupine_api_key == "":
+            raise ConfigurationError("Porcupine API key not configured in settings.py")
+        
+        logging.info("All API keys validated successfully")
+    except ConfigurationError as e:
+        logging.error(f"Configuration error: {e}")
+        print(f"ERROR: {e}")
         return
     
-    if not settings.openai_assistant_id or settings.openai_assistant_id == "":
-        logging.error("OpenAI Assistant ID not configured in settings.py")
-        print("ERROR: Please configure your OpenAI Assistant ID in settings.py")
+    # Perform health checks on external services
+    try:
+        check_external_services()
+    except ExternalServiceError as e:
+        logging.error(f"External service error: {e}")
+        print(f"ERROR: {e}")
         return
-    
-    if not settings.pvporcupine_api_key or settings.pvporcupine_api_key == "":
-        logging.error("Porcupine API key not configured in settings.py")
-        print("ERROR: Please configure your Porcupine API key in settings.py")
-        return
-    
-    logging.info("All API keys validated successfully")
     
     logging.info("Initializing OpenAI client and assistant...")
     client = OpenAI(api_key=settings.openai_api_key)
