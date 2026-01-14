@@ -4,6 +4,7 @@ import helpers
 import logging
 import os
 import random
+import requests
 import settings
 import shutil
 import signal
@@ -89,16 +90,14 @@ def check_external_services() -> bool:
     Raises:
         ExternalServiceError: If critical services are not accessible
     """
-    import requests
-    
     logging.info("Performing health checks on external services...")
     
     # Check OpenAI API
     try:
         logging.info("Checking OpenAI API connectivity...")
         client = OpenAI(api_key=settings.openai_api_key)
-        # Simple API call to verify connectivity
-        client.models.list()
+        # Simple API call to verify connectivity - just get first model
+        models = client.models.list(limit=1)
         logging.info("✓ OpenAI API is accessible")
     except Exception as e:
         logging.error(f"✗ OpenAI API check failed: {e}")
