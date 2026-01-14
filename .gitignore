@@ -53,6 +53,10 @@ dalle_image.png
 resized.png
 speech.mp3
 
+# Release archives
+*.tar.gz
+*.zip
+
 # Logs
 *.log
 /tmp/

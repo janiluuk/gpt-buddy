@@ -50,7 +50,8 @@ jobs:
       if: steps.check_version.outputs.EXISTS == 'false'
       run: |
         # Create archive excluding unnecessary files
-        tar -czf gpt-buddy-${{ steps.version.outputs.VERSION }}.tar.gz \
+        # Create it in /tmp to avoid "file changed as we read it" error
+        tar -czf /tmp/gpt-buddy-${{ steps.version.outputs.VERSION }}.tar.gz \
           --exclude='.git' \
           --exclude='.github' \
           --exclude='lib' \
@@ -68,6 +69,8 @@ jobs:
           --exclude='saved_images' \
           --exclude='settings.py' \
           .
+        # Move the archive to the current directory
+        mv /tmp/gpt-buddy-${{ steps.version.outputs.VERSION }}.tar.gz .
 
     - name: Generate Release Notes
       if: steps.check_version.outputs.EXISTS == 'false'
