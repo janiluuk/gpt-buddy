@@ -3,13 +3,14 @@ import subprocess
 import time
 import logging
 import os
+from typing import Optional
 
 
 # Track the fbi process for better cleanup
 _fbi_process = None
 
 
-def play_audio(audio_file_path):
+def play_audio(audio_file_path: str) -> None:
     """
     Plays a given audio file and waits until it's finished playing
     """
@@ -30,7 +31,7 @@ def play_audio(audio_file_path):
         logging.error(f"Error playing audio: {e}")
 
 
-def display_image(image_file_path):
+def display_image(image_file_path: str) -> None:
     """
     Displays an image to the console framebuffer imageviewer (fbi)
     """
@@ -68,7 +69,7 @@ def display_image(image_file_path):
         logging.error(f"Error displaying image: {e}")
 
 
-def cleanup_display():
+def cleanup_display() -> None:
     """Clean up the fbi display process on shutdown"""
     global _fbi_process
     if _fbi_process and _fbi_process.poll() is None:

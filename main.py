@@ -4,6 +4,7 @@ import helpers
 import logging
 import os
 import random
+import requests
 import settings
 import shutil
 import signal
@@ -14,10 +15,26 @@ from pvrecorder import PvRecorder
 from openai import OpenAI
 import webuiapi
 from PIL import Image
+from typing import Optional, List, Any
+
+
+class GPTBuddyError(Exception):
+    """Base exception class for GPT Buddy errors"""
+    pass
+
+
+class ExternalServiceError(GPTBuddyError):
+    """Exception raised when external services fail"""
+    pass
+
+
+class ConfigurationError(GPTBuddyError):
+    """Exception raised when configuration is invalid"""
+    pass
 
 
 # Signal handler for graceful shutdown
-def signal_handler(sig, frame):
+def signal_handler(sig: int, frame: Any) -> None:
     """Handle shutdown signals gracefully"""
     logging.info(f"Received signal {sig}, initiating graceful shutdown...")
     raise KeyboardInterrupt
@@ -31,7 +48,79 @@ DISPLAY_WIDTH = 800
 DISPLAY_HEIGHT = 480
 
 
-def generate_stable_diffusion_image(prompt, styles=None):
+def sanitize_input(text: str) -> str:
+    """
+    Sanitize user input by removing potentially dangerous characters
+    and limiting length.
+    
+    Args:
+        text: Raw text input to sanitize
+    
+    Returns:
+        Sanitized text string
+    """
+    if not text:
+        return ""
+    
+    # Strip whitespace
+    text = text.strip()
+    
+    # Limit length to prevent abuse
+    max_length = 500
+    if len(text) > max_length:
+        logging.warning(f"Input truncated from {len(text)} to {max_length} characters")
+        text = text[:max_length]
+    
+    # Remove control characters except newlines and tabs
+    sanitized = ''.join(char for char in text if char.isprintable() or char in '\n\t')
+    
+    # Remove any null bytes
+    sanitized = sanitized.replace('\x00', '')
+    
+    return sanitized
+
+
+def check_external_services() -> bool:
+    """
+    Perform health checks on external services.
+    
+    Returns:
+        True if all critical services are accessible, False otherwise
+        
+    Raises:
+        ExternalServiceError: If critical services are not accessible
+    """
+    logging.info("Performing health checks on external services...")
+    
+    # Check OpenAI API
+    try:
+        logging.info("Checking OpenAI API connectivity...")
+        client = OpenAI(api_key=settings.openai_api_key)
+        # Simple API call to verify connectivity - just get first model
+        models = client.models.list(limit=1)
+        logging.info("✓ OpenAI API is accessible")
+    except Exception as e:
+        logging.error(f"✗ OpenAI API check failed: {e}")
+        raise ExternalServiceError(f"Cannot connect to OpenAI API: {e}")
+    
+    # Check Stable Diffusion API (optional service)
+    if settings.stable_diffusion_api and settings.stable_diffusion_port:
+        try:
+            logging.info("Checking Stable Diffusion API connectivity...")
+            url = f"http://{settings.stable_diffusion_api}:{settings.stable_diffusion_port}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                logging.info("✓ Stable Diffusion API is accessible")
+            else:
+                logging.warning(f"⚠ Stable Diffusion API returned status {response.status_code}")
+        except Exception as e:
+            logging.warning(f"⚠ Stable Diffusion API check failed: {e}")
+            logging.warning("Stable Diffusion features may not work, but this is optional")
+    
+    return True
+
+
+def generate_stable_diffusion_image(prompt: str, styles: Optional[List[str]] = None) -> Optional[str]:
     """
     Generate an image using Stable Diffusion API.
     
@@ -40,7 +129,7 @@ def generate_stable_diffusion_image(prompt, styles=None):
         styles: List of style names to apply (default: ["lcmxl"])
     
     Returns:
-        Path to the saved image file
+        Path to the saved image file, or None if generation fails
     """
     if styles is None:
         styles = ["lcmxl"]
@@ -102,22 +191,29 @@ def main():
     
     # Validate API keys are configured
     logging.info("Validating API keys...")
-    if not settings.openai_api_key or settings.openai_api_key == "":
-        logging.error("OpenAI API key not configured in settings.py")
-        print("ERROR: Please configure your OpenAI API key in settings.py")
+    try:
+        if not settings.openai_api_key or settings.openai_api_key == "":
+            raise ConfigurationError("OpenAI API key not configured in settings.py")
+        
+        if not settings.openai_assistant_id or settings.openai_assistant_id == "":
+            raise ConfigurationError("OpenAI Assistant ID not configured in settings.py")
+        
+        if not settings.pvporcupine_api_key or settings.pvporcupine_api_key == "":
+            raise ConfigurationError("Porcupine API key not configured in settings.py")
+        
+        logging.info("All API keys validated successfully")
+    except ConfigurationError as e:
+        logging.error(f"Configuration error: {e}")
+        print(f"ERROR: {e}")
         return
     
-    if not settings.openai_assistant_id or settings.openai_assistant_id == "":
-        logging.error("OpenAI Assistant ID not configured in settings.py")
-        print("ERROR: Please configure your OpenAI Assistant ID in settings.py")
+    # Perform health checks on external services
+    try:
+        check_external_services()
+    except ExternalServiceError as e:
+        logging.error(f"External service error: {e}")
+        print(f"ERROR: {e}")
         return
-    
-    if not settings.pvporcupine_api_key or settings.pvporcupine_api_key == "":
-        logging.error("Porcupine API key not configured in settings.py")
-        print("ERROR: Please configure your Porcupine API key in settings.py")
-        return
-    
-    logging.info("All API keys validated successfully")
     
     logging.info("Initializing OpenAI client and assistant...")
     client = OpenAI(api_key=settings.openai_api_key)
@@ -206,6 +302,8 @@ def main():
                 audio = speech_result.listen(source, phrase_time_limit=PHRASE_TIME_LIMIT_SECONDS)
             try:
                 recognised_speech = speech_result.recognize_google(audio)
+                # Sanitize the recognized speech input
+                recognised_speech = sanitize_input(recognised_speech)
                 logging.info(f"Recognised speech: {recognised_speech}")
                 wait_for_hotword = True
                 first_session_listen = True

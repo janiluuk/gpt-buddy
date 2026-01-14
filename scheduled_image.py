@@ -5,7 +5,7 @@ import logging
 from openai import OpenAI
 
 
-def scheduled_image():
+def scheduled_image() -> None:
     """
     Intended to be run by a cronjob which will automatically show a new image
     on the display.
