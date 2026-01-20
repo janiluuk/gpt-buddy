@@ -102,8 +102,8 @@ bandit -r .
 
 This project includes GitHub Actions workflows for:
 
-- **Tests** (`test.yml`): Runs test suite on Python 3.10, 3.11, and 3.12
-- **Code Quality** (`lint.yml`): Checks formatting, linting, and security
+- **Tests** (`test.yml`): Runs test suite on Python 3.11, 3.12, and 3.13
+- **Code Quality** (`lint.yml`): Checks formatting, linting, and security with Python 3.13
 - **Release** (`release.yml`): Automatically creates releases when main branch is updated
 
 See [.github/workflows/README.md](.github/workflows/README.md) for detailed workflow documentation.
