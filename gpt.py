@@ -9,10 +9,8 @@ import time
 from io import BytesIO
 from PIL import Image
 from pathlib import Path
-from typing import Optional
 from openai import OpenAI
 from openai.types.beta.assistant import Assistant
-
 
 # Constants
 ASSISTANT_TIMEOUT_SECONDS = 10
@@ -45,9 +43,7 @@ def whisper_text_to_speech(openai_client: OpenAI, text_to_say: str) -> None:
     try:
         logging.info(f"Generating speech for text (length: {len(text_to_say)} chars)")
         speech_file_path = Path(__file__).parent / "speech.mp3"
-        response = openai_client.audio.speech.create(
-            model="tts-1", voice="nova", input=text_to_say
-        )
+        response = openai_client.audio.speech.create(model="tts-1", voice="nova", input=text_to_say)
         response.stream_to_file(speech_file_path)
         logging.info(f"Speech file saved to: {speech_file_path}")
         helpers.play_audio(speech_file_path)
@@ -56,16 +52,16 @@ def whisper_text_to_speech(openai_client: OpenAI, text_to_say: str) -> None:
         raise
 
 
-def generate_chatgpt_image(openai_client: OpenAI, user_text: str, assistant_output_text: str) -> None:
+def generate_chatgpt_image(
+    openai_client: OpenAI, user_text: str, assistant_output_text: str
+) -> None:
     """
     Generates a dall-e image based on given text (usually the output of the
     GPT assistant)
     """
     try:
         logging.info("Starting DALL-E image generation")
-        image_prompt = (
-            f"{prompts.assistant_image_prompt}\n{user_text}\n{assistant_output_text}"
-        )
+        image_prompt = f"{prompts.assistant_image_prompt}\n{user_text}\n{assistant_output_text}"
         logging.debug(f"Image prompt: {image_prompt[:100]}...")
 
         response = openai_client.images.generate(
@@ -84,23 +80,23 @@ def generate_chatgpt_image(openai_client: OpenAI, user_text: str, assistant_outp
         if response.ok:
             # Process image directly from stream without saving twice
             logging.info(f"Resizing image to {IMAGE_WIDTH}x{IMAGE_HEIGHT}")
-            
+
             # Read image data into memory
             image_data = BytesIO()
             response.raw.decode_content = True
             shutil.copyfileobj(response.raw, image_data)
             image_data.seek(0)
-            
+
             # Open and resize image from memory
             image = Image.open(image_data)
-            
+
             # Save original for archival/sending
             image.save("dalle_image.png")
-            
+
             # Resize for display
             resized_image = image.resize((IMAGE_WIDTH, IMAGE_HEIGHT))
             resized_image.save("resized.png")
-            
+
             logging.info("Image downloaded, resized and saved")
             helpers.display_image("resized.png")
         else:
@@ -110,7 +106,11 @@ def generate_chatgpt_image(openai_client: OpenAI, user_text: str, assistant_outp
 
 
 def send_to_assistant(
-    openai_client: OpenAI, assistant: Assistant, assistant_thread_id: str, input_text: str, text_to_speech: bool = True
+    openai_client: OpenAI,
+    assistant: Assistant,
+    assistant_thread_id: str,
+    input_text: str,
+    text_to_speech: bool = True,
 ) -> None:
     """
     Send text to an OpenAI Assistant and gets the response to pass to Whisper
@@ -118,7 +118,7 @@ def send_to_assistant(
     """
     try:
         logging.info(f"Sending message to assistant. Thread: {assistant_thread_id}")
-        
+
         # Encourage the GPT3 response to be brief. This is usually set on
         # the assistant prompt, however I've found responses can still be
         # rather long.
@@ -127,7 +127,7 @@ def send_to_assistant(
 
         logging.debug(f"Input text: {amended_input_text}")
 
-        message = openai_client.beta.threads.messages.create(
+        openai_client.beta.threads.messages.create(
             thread_id=assistant_thread_id, role="user", content=amended_input_text
         )
 
@@ -162,7 +162,7 @@ def send_to_assistant(
             thread_messages = openai_client.beta.threads.messages.list(assistant_thread_id)
             # The most recent assistant's response will be the first item in the list
             assistant_output = thread_messages.data[0].content[0].text.value
-        
+
         logging.info(f"Assistant response (length: {len(assistant_output)} chars)")
         logging.debug(f"Assistant output: {assistant_output}")
 
@@ -178,7 +178,7 @@ def send_to_assistant(
             whisper_text_to_speech(openai_client, assistant_output)
         else:
             logging.info("Skipping text-to-speech as requested")
-    
+
     except Exception as e:
         logging.error(f"Error in send_to_assistant: {e}", exc_info=True)
         raise

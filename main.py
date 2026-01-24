@@ -14,22 +14,24 @@ import pvporcupine
 from pvrecorder import PvRecorder
 from openai import OpenAI
 import webuiapi
-from PIL import Image
 from typing import Optional, List, Any
 
 
 class GPTBuddyError(Exception):
     """Base exception class for GPT Buddy errors"""
+
     pass
 
 
 class ExternalServiceError(GPTBuddyError):
     """Exception raised when external services fail"""
+
     pass
 
 
 class ConfigurationError(GPTBuddyError):
     """Exception raised when configuration is invalid"""
+
     pass
 
 
@@ -52,57 +54,57 @@ def sanitize_input(text: str) -> str:
     """
     Sanitize user input by removing potentially dangerous characters
     and limiting length.
-    
+
     Args:
         text: Raw text input to sanitize
-    
+
     Returns:
         Sanitized text string
     """
     if not text:
         return ""
-    
+
     # Strip whitespace
     text = text.strip()
-    
+
     # Limit length to prevent abuse
     max_length = 500
     if len(text) > max_length:
         logging.warning(f"Input truncated from {len(text)} to {max_length} characters")
         text = text[:max_length]
-    
+
     # Remove control characters except newlines and tabs
-    sanitized = ''.join(char for char in text if char.isprintable() or char in '\n\t')
-    
+    sanitized = "".join(char for char in text if char.isprintable() or char in "\n\t")
+
     # Remove any null bytes
-    sanitized = sanitized.replace('\x00', '')
-    
+    sanitized = sanitized.replace("\x00", "")
+
     return sanitized
 
 
 def check_external_services() -> bool:
     """
     Perform health checks on external services.
-    
+
     Returns:
         True if all critical services are accessible, False otherwise
-        
+
     Raises:
         ExternalServiceError: If critical services are not accessible
     """
     logging.info("Performing health checks on external services...")
-    
+
     # Check OpenAI API
     try:
         logging.info("Checking OpenAI API connectivity...")
         client = OpenAI(api_key=settings.openai_api_key)
         # Simple API call to verify connectivity - just get first model
-        models = client.models.list(limit=1)
+        _ = client.models.list(limit=1)
         logging.info("✓ OpenAI API is accessible")
     except Exception as e:
         logging.error(f"✗ OpenAI API check failed: {e}")
         raise ExternalServiceError(f"Cannot connect to OpenAI API: {e}")
-    
+
     # Check Stable Diffusion API (optional service)
     if settings.stable_diffusion_api and settings.stable_diffusion_port:
         try:
@@ -116,44 +118,46 @@ def check_external_services() -> bool:
         except Exception as e:
             logging.warning(f"⚠ Stable Diffusion API check failed: {e}")
             logging.warning("Stable Diffusion features may not work, but this is optional")
-    
+
     return True
 
 
-def generate_stable_diffusion_image(prompt: str, styles: Optional[List[str]] = None) -> Optional[str]:
+def generate_stable_diffusion_image(
+    prompt: str, styles: Optional[List[str]] = None
+) -> Optional[str]:
     """
     Generate an image using Stable Diffusion API.
-    
+
     Args:
         prompt: Text prompt for image generation
         styles: List of style names to apply (default: ["lcmxl"])
-    
+
     Returns:
         Path to the saved image file, or None if generation fails
     """
     if styles is None:
         styles = ["lcmxl"]
-    
+
     # Check if Stable Diffusion is configured
     if not settings.stable_diffusion_api or not settings.stable_diffusion_port:
         logging.warning("Stable Diffusion not configured in settings.py")
         return None
-    
+
     try:
         # Get steps from settings with validation
-        steps = getattr(settings, 'stable_diffusion_steps', 8)
+        steps = getattr(settings, "stable_diffusion_steps", 8)
         if not isinstance(steps, int) or steps < 1 or steps > 100:
             logging.warning(f"Invalid stable_diffusion_steps: {steps}, using default: 8")
             steps = 8
-        
+
         api = webuiapi.WebUIApi(
             host=settings.stable_diffusion_api,
             port=int(settings.stable_diffusion_port),
-            steps=steps
+            steps=steps,
         )
-        
+
         filename = time.strftime("%Y%m%d-%H%M%S")
-        
+
         result = api.txt2img(
             prompt=prompt,
             negative_prompt="ugly, out of frame",
@@ -161,9 +165,9 @@ def generate_stable_diffusion_image(prompt: str, styles: Optional[List[str]] = N
             height=DISPLAY_HEIGHT,
             styles=styles,
             save_images=True,
-            cfg_scale=2
+            cfg_scale=2,
         )
-        
+
         file_path = f"saved_images/{filename}.png"
         result.image.save(file_path)
         logging.info(f"Stable Diffusion image saved to {file_path}")
@@ -173,13 +177,12 @@ def generate_stable_diffusion_image(prompt: str, styles: Optional[List[str]] = N
         return None
 
 
-
 def main():
     """Main application loop for the GPT Buddy voice assistant."""
     logging.info("=" * 60)
     logging.info("Starting GPT Buddy Voice Assistant")
     logging.info("=" * 60)
-    
+
     # Validate required directories exist
     required_dirs = ["saved_images", "audio", "assistant_images"]
     for dir_name in required_dirs:
@@ -188,25 +191,25 @@ def main():
             os.makedirs(dir_name, exist_ok=True)
         else:
             logging.info(f"Directory '{dir_name}' exists")
-    
+
     # Validate API keys are configured
     logging.info("Validating API keys...")
     try:
         if not settings.openai_api_key or settings.openai_api_key == "":
             raise ConfigurationError("OpenAI API key not configured in settings.py")
-        
+
         if not settings.openai_assistant_id or settings.openai_assistant_id == "":
             raise ConfigurationError("OpenAI Assistant ID not configured in settings.py")
-        
+
         if not settings.pvporcupine_api_key or settings.pvporcupine_api_key == "":
             raise ConfigurationError("Porcupine API key not configured in settings.py")
-        
+
         logging.info("All API keys validated successfully")
     except ConfigurationError as e:
         logging.error(f"Configuration error: {e}")
         print(f"ERROR: {e}")
         return
-    
+
     # Perform health checks on external services
     try:
         check_external_services()
@@ -214,13 +217,13 @@ def main():
         logging.error(f"External service error: {e}")
         print(f"ERROR: {e}")
         return
-    
+
     logging.info("Initializing OpenAI client and assistant...")
     client = OpenAI(api_key=settings.openai_api_key)
     assistant = gpt.get_assistant(client)
     assistant_thread = client.beta.threads.create()
     logging.info(f"Assistant thread created: {assistant_thread.id}")
-    
+
     # Check if saved_images directory has any images
     images = os.listdir("saved_images")
     if images:
@@ -250,8 +253,7 @@ def main():
     wait_for_hotword = True
     first_session_listen = True
     current_prompt = None
-    prompt = None
-    
+
     # Resources that need cleanup
     handle = None
     hotword_recorder = None
@@ -337,16 +339,9 @@ def main():
                 show_ai_image_phrases = [
                     "make image",
                 ]
-                make_another_phrases = [
-                    "make another",
-                    "make more"
-                ]
+                make_another_phrases = ["make another", "make more"]
 
-
-                if any(
-                    cancel_phrase in recognised_speech
-                    for cancel_phrase in cancel_phrases
-                ):
+                if any(cancel_phrase in recognised_speech for cancel_phrase in cancel_phrases):
                     # Cancel the conversation
                     end_conversation_phrases = [
                         "audio/oh_ok.mp3",
@@ -380,7 +375,7 @@ def main():
                     helpers.play_audio(random.choice(end_conversation_phrases))
 
                     logging.info(f"Generating another image with prompt: {current_prompt}")
-                    
+
                     file_path = generate_stable_diffusion_image(current_prompt, styles=["anime"])
                     if file_path:
                         helpers.display_image(file_path)
@@ -401,7 +396,7 @@ def main():
                         # Remove current image from selection if it exists
                         if current_image and current_image in images:
                             images.remove(current_image)
-                        
+
                         # Check if there are still images to choose from
                         if images:
                             random_image = random.choice(images)
@@ -423,7 +418,7 @@ def main():
 
                     current_prompt = recognised_speech.replace("make image", "").strip()
                     logging.info(f"Generating image with prompt: {current_prompt}")
-                    
+
                     file_path = generate_stable_diffusion_image(current_prompt, styles=["lcmxl"])
                     if file_path:
                         helpers.display_image(file_path)
@@ -436,9 +431,7 @@ def main():
 
                     helpers.display_image("assistant_images/thinking.png")
                     helpers.play_audio("audio/hmm.mp3")
-                    gpt.send_to_assistant(
-                        client, assistant, assistant_thread.id, recognised_speech
-                    )
+                    gpt.send_to_assistant(client, assistant, assistant_thread.id, recognised_speech)
                     wait_for_hotword = True
 
             except speech_recognition.UnknownValueError:
@@ -464,17 +457,19 @@ def main():
                 handle.delete()
             except Exception as e:
                 logging.error(f"Error cleaning up porcupine handle: {e}")
-        
+
         # Wait for image generation thread to complete if running
         if gpt.image_thread is not None and gpt.image_thread.is_alive():
             logging.info("Waiting for image generation to complete...")
             gpt.image_thread.join(timeout=10)
             if gpt.image_thread.is_alive():
-                logging.warning("Image generation thread did not complete in time, continuing with shutdown")
-        
+                logging.warning(
+                    "Image generation thread did not complete in time, continuing with shutdown"
+                )
+
         # Cleanup display process
         helpers.cleanup_display()
-        
+
         logging.info("Shutdown complete")
 
 
@@ -482,7 +477,7 @@ if __name__ == "__main__":
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     logging.basicConfig(
         format="%(asctime)s %(filename)s %(lineno)d - %(message)s",
         level=logging.INFO,

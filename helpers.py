@@ -3,8 +3,6 @@ import subprocess
 import time
 import logging
 import os
-from typing import Optional
-
 
 # Track the fbi process for better cleanup
 _fbi_process = None
@@ -17,7 +15,7 @@ def play_audio(audio_file_path: str) -> None:
     if not os.path.exists(audio_file_path):
         logging.error(f"Audio file not found: {audio_file_path}")
         return
-    
+
     try:
         logging.info(f"Playing audio: {audio_file_path}")
         player = vlc.MediaPlayer(audio_file_path)
@@ -36,17 +34,17 @@ def display_image(image_file_path: str) -> None:
     Displays an image to the console framebuffer imageviewer (fbi)
     """
     global _fbi_process
-    
+
     # Validate that the file exists and is within allowed directories
     if not os.path.exists(image_file_path):
         logging.error(f"Image file not found: {image_file_path}")
         return
-    
+
     try:
         # Get absolute path to prevent directory traversal
         abs_path = os.path.abspath(image_file_path)
         logging.info(f"Displaying image: {abs_path}")
-        
+
         # Remove the current image by terminating tracked process
         if _fbi_process and _fbi_process.poll() is None:
             # Process is still running, terminate it
@@ -57,12 +55,12 @@ def display_image(image_file_path: str) -> None:
             except subprocess.TimeoutExpired:
                 logging.warning("fbi process did not terminate, killing it")
                 _fbi_process.kill()
-        
+
         # Display the new image and track the process
         _fbi_process = subprocess.Popen(
             ["sudo", "fbi", "-T", "1", abs_path, "--noverbose"],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
         )
         logging.debug(f"Started new fbi process (PID: {_fbi_process.pid})")
     except Exception as e:

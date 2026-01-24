@@ -1,6 +1,5 @@
 import apprise
 import settings
-from typing import List
 
 
 def send(title: str, message: str, image_path: str) -> None:
@@ -16,11 +15,7 @@ def send(title: str, message: str, image_path: str) -> None:
         for service in settings.apprise_services:
             app.add(service)
 
-        app.notify(
-            body=message,
-            title=title,
-            attach=image_path
-        )
+        app.notify(body=message, title=title, attach=image_path)
 
 
 if __name__ == "__main__":
